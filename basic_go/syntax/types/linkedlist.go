@@ -8,14 +8,37 @@ type LinkedList struct {
 	// 这个就是包外可访问
 	Len int
 }
+
+// 私有结构体
 type node struct {
 }
 
-func (l LinkedList) Add(idx int, val any) {
-
+func (l LinkedList) Add(idx int, val any) error {
+	//TODO implement me
+	panic("implement me")
 }
 
+func (l LinkedList) Append(val any) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l LinkedList) Delete(index int) (any, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l LinkedList) toSlice() ([]any, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+// 结构体接收器
+//func (l LinkedList) Add(idx int, val any) error {
+//	//TODO implement me
+//	panic("implement me")
+//}
 // 方法接收器，receiver
-func (l *LinkedList) AddV1(idx int, val any) {
-
-}
+//func (l *LinkedList) AddV1(idx int, val any) {
+//
+//}
