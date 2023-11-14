@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"practice/webook/internal/domain"
 	"practice/webook/internal/repository"
+	"practice/webook/pkg/logger"
 )
 
 var ErrUserDuplicate = repository.ErrUserDuplicate
@@ -24,11 +26,21 @@ type UserService interface {
 type SMSUserService struct {
 	repo  repository.UserRepository
 	redis *redis.Client
+	l     logger.LoggerV1
 }
 
-func NewUserService(repo repository.UserRepository) UserService {
+func NewUserService(repo repository.UserRepository, l logger.LoggerV1) UserService {
 	return &SMSUserService{
 		repo: repo,
+		l:    l,
+	}
+}
+
+func NewUserServiceV1(repo repository.UserRepository, l *zap.Logger) UserService { // 保持依赖注入，但又没有完全注入
+	return &SMSUserService{
+		repo: repo,
+		// 预留了变化空间
+		//logger: zap.L(),
 	}
 }
 
@@ -73,6 +85,11 @@ func (svc *SMSUserService) FindOrCreate(ctx context.Context,
 		// 不为 ErrUserNotFound 的也会进来这里
 		return u, err
 	}
+	// 这里，把 phone 脱敏之后打出来
+	//zap.L().Info("用户未注册", zap.String("phone", phone))
+	//svc.logger.Info("用户未注册", zap.String("phone", phone))
+	svc.l.Info("用户未注册", logger.String("phone", phone))
+	//loggerxx.Logger.Info("用户未注册", zap.String("phone", phone))
 	// 在系统资源不足，触发降级后，不执行慢路径了
 	//if ctx.Value("降级") == "true" {
 	//	return domain.User{}, errors.New("系统降级了")

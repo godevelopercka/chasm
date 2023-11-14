@@ -66,13 +66,16 @@ func (svc *SMSCodeService) Send(ctx context.Context,
 	// 发送出去
 	svc.smsSvc.Send(ctx, codeTplId.Load(), []string{code}, phone)
 	if err != nil {
-		// 这个地方怎么办？
-		// 这意味着，Redis 有这个验证码，但是不好意思，你没发成功，用户根本收不到
-		// 我能不能删掉这个验证码？
-		// 你这个 err 可能是超时的 err，你都不知道，发出了没
-		// 在这里重试
-		// 要重试的话，初始化的时候，传入一个自己就会重试的 smsSvc
+		err = fmt.Errorf("发送短信出现异常 %w", err)
 	}
+	//if err != nil {
+	// 这个地方怎么办？
+	// 这意味着，Redis 有这个验证码，但是不好意思，你没发成功，用户根本收不到
+	// 我能不能删掉这个验证码？
+	// 你这个 err 可能是超时的 err，你都不知道，发出了没
+	// 在这里重试
+	// 要重试的话，初始化的时候，传入一个自己就会重试的 smsSvc
+	//}
 	return err
 }
 

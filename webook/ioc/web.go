@@ -1,12 +1,17 @@
 package ioc
 
 import (
+	"context"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 	"practice/webook/internal/web"
 	ijwt "practice/webook/internal/web/jwt"
 	"practice/webook/internal/web/middleware"
+	"practice/webook/pkg/ginx/middlewares/logger"
+	logger2 "practice/webook/pkg/logger"
 	"strings"
 	"time"
 )
@@ -19,9 +24,17 @@ func InitGin(mdls []gin.HandlerFunc, userHdl *web.UserHandler, oauth2WechatHdl w
 	return server
 }
 
-func InitMiddlewares(redisClient redis.Cmdable, jwtHdl ijwt.Handler) []gin.HandlerFunc {
+func InitMiddlewares(redisClient redis.Cmdable, jwtHdl ijwt.Handler, l logger2.LoggerV1) []gin.HandlerFunc {
+	bd := logger.NewBuilder(func(ctx context.Context, al *logger.AccessLog) {
+		l.Debug("HTTP请求", logger2.Field{Key: "al", Value: al})
+	}).AllowReqBody(true).AllowRespBody()
+	viper.OnConfigChange(func(in fsnotify.Event) {
+		ok := viper.GetBool("web.logreq")
+		bd.AllowReqBody(ok)
+	})
 	return []gin.HandlerFunc{
 		corsHdl(),
+		bd.Build(),
 		middleware.NewLoginJWTMiddlewareBuilder(jwtHdl).
 			IgnorePaths("/users/signup").
 			IgnorePaths("/users/refresh_token").
