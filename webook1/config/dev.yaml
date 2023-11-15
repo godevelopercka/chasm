@@ -1,5 +1,0 @@
-db:
-  dsn: "root:root@tcp(localhost:13317)/webookv1"
-
-redis:
-  addr: "localhost:6379"
