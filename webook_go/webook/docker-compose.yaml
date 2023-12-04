@@ -1,0 +1,28 @@
+version: '4.0'
+services:
+  mysql8:
+    image: mysql:8.0.34 # 对应的本地数据库版本
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    #    command: --default-authentication-plugin=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      #      设置初始化脚本
+      - ./script/mysql/:/docker-entrypoint-initdb.d/
+    ports:
+      #      注意这里我映射为了 13316 端口
+      - "13316:3306"
+  redis:
+    image: 'bitnami/redis:latest'
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - '6379:6379'
+  etcd:
+    image: 'bitnami/etcd:latest'
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+    ports:
+      #     所以你要用 12379 端口来连接 etcd
+      - 12379:2379
