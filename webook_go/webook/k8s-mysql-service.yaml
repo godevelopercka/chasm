@@ -1,13 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: $Title$
+  name: webook-mysql
 spec:
   selector:
-    app: $Title$
+    app: webook-mysql
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 8080
+      # 你访问的端口
+      port: 3308
+      # 与 deployment 中的对应
+      targetPort: 3306
+      # 如果设置了这个 nodePort ,上面的 port 就失效了
+      nodePort: 30001
   type: NodePort
-  $END$
+  

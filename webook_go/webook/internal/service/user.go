@@ -6,22 +6,33 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"webook_go/webook/internal/domain"
 	"webook_go/webook/internal/repository"
+	"webook_go/webook/internal/repository/cache"
 )
 
-var ErrUserDuplicateEmail = repository.ErrUserDuplicateEmail
+var ErrUserDuplicateEmail = repository.ErrUserDuplicate
 var ErrInvalidUserOrPassword = errors.New("账号/邮箱或密码不对")
 
-type UserService struct {
-	repo *repository.UserRepository
+type UserService interface {
+	SignUp(ctx context.Context, u domain.User) error
+	Login(ctx context.Context, email, password string) (domain.User, error)
+	Edit(ctx context.Context, id int64, Nickname, Birthday, AboutMe string) (domain.User, error)
+	FindOrCreate(ctx context.Context, Phone string) (domain.User, error)
+	Profile(ctx context.Context, id int64) (domain.User, error)
 }
 
-func NewUserService(repo *repository.UserRepository) *UserService {
-	return &UserService{
-		repo: repo,
+type userService struct {
+	repo  repository.UserRepository
+	cache cache.CodeCache
+}
+
+func NewUserService(repo repository.UserRepository, c cache.CodeCache) UserService {
+	return &userService{
+		repo:  repo,
+		cache: c,
 	}
 }
 
-func (svc *UserService) SignUp(ctx context.Context, u domain.User) error { // 调用下层 repository 的方法
+func (svc *userService) SignUp(ctx context.Context, u domain.User) error { // 调用下层 repository 的方法
 	// 加密密码
 	hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -32,7 +43,7 @@ func (svc *UserService) SignUp(ctx context.Context, u domain.User) error { // �
 	return svc.repo.Create(ctx, u)
 }
 
-func (svc *UserService) Login(ctx context.Context, email, password string) (domain.User, error) {
+func (svc *userService) Login(ctx context.Context, email, password string) (domain.User, error) {
 	u, err := svc.repo.FindByEmail(ctx, email)
 	if err == repository.ErrUserNotFound {
 		return domain.User{}, ErrInvalidUserOrPassword
@@ -48,7 +59,7 @@ func (svc *UserService) Login(ctx context.Context, email, password string) (doma
 	return u, nil
 }
 
-func (svc *UserService) Edit(ctx context.Context, id int64, Nickname, Birthday, AboutMe string) (domain.User, error) {
+func (svc *userService) Edit(ctx context.Context, id int64, Nickname, Birthday, AboutMe string) (domain.User, error) {
 	u, err := svc.repo.Edit(ctx, id, Nickname, Birthday, AboutMe)
 	if err != nil {
 		return domain.User{}, errors.New("请注册账号")
@@ -56,10 +67,43 @@ func (svc *UserService) Edit(ctx context.Context, id int64, Nickname, Birthday, 
 	return u, nil
 }
 
-func (svc *UserService) Profile(ctx context.Context, id int64) (domain.User, error) {
-	u, err := svc.repo.Profile(ctx, id)
-	if err != nil {
-		return domain.User{}, errors.New("暂无提交个人信息")
+func (svc *userService) FindOrCreate(ctx context.Context, Phone string) (domain.User, error) {
+	u, err := svc.repo.FindByPhone(ctx, Phone)
+	// 要判断，是否有这个用户
+	if err != repository.ErrUserNotFound {
+		// 绝大部分请求会进来这里，因为很多用户都注册过了
+		// 这个叫做快路径
+		// nil 会进来这里
+		// 不为 ErrUserNotFound 的也会进来这里
+		return u, err
 	}
-	return u, nil
+
+	// 在系统资源不足，触发降级之后，不执行慢路径了。相当于优先服务已经注册的用户
+	if ctx.Value("降级") == "true" {
+		return domain.User{}, errors.New("系统降级了")
+	}
+	// 这个叫做慢路径
+	// 你明确知道，没有这个用户
+	u = domain.User{
+		Phone: Phone,
+	}
+	err = svc.repo.Create(ctx, u)
+	if err != nil || err != repository.ErrUserDuplicate {
+		return u, err
+	}
+	// 因为这里会遇到主从延迟的问题
+	return svc.repo.FindByPhone(ctx, Phone)
+}
+
+func (svc *userService) Profile(ctx context.Context, id int64) (domain.User, error) {
+	// 个人版-无缓存
+	//u, err := svc.repo.Profile(ctx, id)
+	//if err != nil {
+	//	return domain.User{}, errors.New("暂无提交个人信息")
+	//}
+	//return u, nil
+
+	// 大明版-先从缓存查
+	u, err := svc.repo.FindById(ctx, id)
+	return u, err
 }

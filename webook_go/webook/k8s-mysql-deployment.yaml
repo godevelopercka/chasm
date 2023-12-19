@@ -1,23 +1,43 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: $Title$
+  name: webook-mysql
   labels:
-    app: $Title$
+    app: webook-mysql
 spec:
-  replicas: 1
+  replicas: 1 # 与 PVC 的 ReadWriteOnce 对应
   selector:
     matchLabels:
-      app: $Title$
+      app: webook-mysql
   template:
     metadata:
-      name: $Title$
+      name: webook-mysql
       labels:
-        app: $Title$
+        app: webook-mysql
     spec:
       containers:
-        - name: $Title$
-          image: $Image$
+        - name: webook-mysql
+          image: mysql:8.0.34
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
           imagePullPolicy: IfNotPresent
+          # 用的 pod 里面具体的哪个 volume, 这里用 webook-mysql-claim
+          volumeMounts:
+            # 这边要对应到 mysql 的数据存储的位置
+            # 通过 MySQL 的配置可以改这个目录
+            - mountPath: /var/lib/mysql
+              name: mysql-storage
+          ports:
+            - containerPort: 3306
       restartPolicy: Always
-      $END$
+      # 整个 pod 有哪个 volume, 以下有两个 webook-mysql-claim, webook-hadoop-claim
+      volumes:
+        - name: mysql-storage
+          # 持久化卷
+          persistentVolumeClaim:
+            # claim 定义这个持久化卷
+            claimName: webook-mysql-claim-v1
+#        - name: hadoop-storage
+#          persistentVolumeClaim:
+#            claimName: webook-hadoop-claim

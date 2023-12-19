@@ -1,13 +1,14 @@
 apiVersion: v1
-kind: Pod
+#  这个指的是我 k8s 有哪些 volume
+kind: PersistentVolume
 metadata:
-  name: $Title$
-  labels:
-    app: $Title$
+  name: webook-mysql-claim-pv-v1
 spec:
-  containers:
-    - name: $Title$
-      image: $Image$
-      imagePullPolicy: IfNotPresent
-  restartPolicy: Always
-  $END$
+  # 要与 pvc 的对应
+  storageClassName: muanualv1
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/live"

@@ -1,4 +1,4 @@
-package main
+package ioc
 
 import (
 	"webook_go/webook/internal/service/sms"

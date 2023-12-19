@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: $Title$
+  name: webook-redis
   labels:
-    app: $Title$
+    app: webook-redis
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: $Title$
+      app: webook-redis
   template:
     metadata:
-      name: $Title$
+      name: webook-redis
       labels:
-        app: $Title$
+        app: webook-redis
     spec:
       containers:
-        - name: $Title$
-          image: $Image$
+        - name: webook-redis
+          image: redis:latest
           imagePullPolicy: IfNotPresent
       restartPolicy: Always
-      $END$
+      

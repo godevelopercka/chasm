@@ -1,4 +1,4 @@
-package main
+package ioc
 
 import (
 	"github.com/gin-contrib/cors"

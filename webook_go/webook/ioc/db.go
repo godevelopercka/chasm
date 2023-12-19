@@ -1,4 +1,4 @@
-package main
+package ioc
 
 import (
 	"gorm.io/driver/mysql"

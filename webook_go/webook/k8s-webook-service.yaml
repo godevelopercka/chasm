@@ -1,13 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: $Title$
+  name: webook
 spec:
+  # 使用 ClusterIP 这样外部就访问不到
+  type: LoadBalancer
   selector:
-    app: $Title$
+    app: webook
   ports:
     - protocol: TCP
+      name: http
       port: 80
       targetPort: 8080
-  type: NodePort
-  $END$

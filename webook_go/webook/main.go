@@ -2,30 +2,38 @@ package main
 
 import (
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	"net/http"
 	"strings"
 	"time"
-	"webook_go/webook/internal/repository"
-	"webook_go/webook/internal/repository/dao"
-	"webook_go/webook/internal/service"
-	"webook_go/webook/internal/web"
 	"webook_go/webook/internal/web/middleware"
 )
 
 func main() {
-	db := InitDB()
+	//db := InitDB()
+	//rdb := redis.NewClient(&redis.Options{
+	//	Addr: config.Config.Redis.Addr,
+	//})
+	//u := InitUser(db, rdb)
+	//server := InitWebServer()
+	//u.RegisterRoutes(server)
 	server := InitWebServer()
-	u := InitUser(db)
-	u.RegisterRoutes(server)
+	//server := gin.Default()
+	server.GET("/hello", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "你好，你来了")
+	})
 	server.Run(":8080")
 }
 
-func InitWebServer() *gin.Engine {
+func initWebServer() *gin.Engine {
 	server := gin.Default()
+	// 结合 pkg 中的代码解读
+	// 使用 redis 限流
+	//redisClient := redis.NewClient(&redis.Options{
+	//	Addr: config.Config.Redis.Addr, // 将 localhost 改成用 k8s-redis-service 的 name,端口用 port
+	//})
+	//server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build())
+
 	server.Use(cors.New(cors.Config{
 		AllowMethods:     []string{"GET", "POST"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
@@ -35,38 +43,30 @@ func InitWebServer() *gin.Engine {
 			if strings.HasPrefix(origin, "http://localhost") {
 				return true
 			}
-			return strings.Contains(origin, "ckago.com")
+			return strings.Contains(origin, "live.webook.com")
 		},
 		MaxAge: 12 * time.Hour,
 	}))
 	// 步骤一：首先把 session 塞进 context 里面，相当于用 context 作为中介存储了 cookie，并将 session 命名成 mysession
-	store := cookie.NewStore([]byte("secret"))
-	server.Use(sessions.Sessions("mysession", store)) // userId 放在 store
+	//store := cookie.NewStore([]byte("secret"))
+	//store := memstore.NewStore([]byte("NDIOaqI8vCUZfWoNVcol0CuqFwHbu4cn"), []byte("VICKB7WKwidXBpPnzHqeiwTnWLDcuahY"))
+	//store, err := redis.NewStore(16, "tcp", "localhost:6379", "", []byte("NDIOaqI8vCUZfWoNVcol0CuqFwHbu4cn"), []byte("VICKB7WKwidXBpPnzHqeiwTnWLDcuahY"))
+	//if err != nil {
+	//	panic(err)
+	//}
+
+	//server.Use(sessions.Sessions("mysession", store)) // userId 放在 store
 
 	// 步骤四
 	// 登录校验
-	server.Use(middleware.NewLoginMiddlewareBuilder().
+	//server.Use(middleware.NewLoginMiddlewareBuilder().
+	//	IgnorePaths("/users/signup").
+	//	IgnorePaths("/users/login").Build())
+	// JWT 登录校验
+	server.Use(middleware.NewLoginJWTMiddlewareBuilder().
 		IgnorePaths("/users/signup").
+		IgnorePaths("/users/login_sms/code/send").
+		IgnorePaths("/users/login_sms").
 		IgnorePaths("/users/login").Build())
 	return server
-}
-
-func InitDB() *gorm.DB {
-	db, err := gorm.Open(mysql.Open("root:root@tcp(localhost:13316)/webook"))
-	if err != nil {
-		panic(err)
-	}
-	err = dao.InitTables(db)
-	if err != nil {
-		panic(err)
-	}
-	return db
-}
-
-func InitUser(db *gorm.DB) *web.UserHandler {
-	ud := dao.NewUserDAO(db)
-	repo := repository.NewRepository(ud)
-	svc := service.NewUserService(repo)
-	u := web.NewUserHandler(svc)
-	return u
 }

@@ -1,19 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: $Title$
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: webook-ingress
 spec:
+  # 告诉他要用 nginx
   ingressClassName: nginx
   rules:
-    - http:
+    # host 是 live.webook.com 的时候，命中我这条
+    - host: live.webook.com
+      http:
         paths:
-          - path: /api
-            pathType: Prefix
-            backend:
+          # 指向后端服务
+          #            请求路径的前缀是 / 的时候
+          #            将流量转发过去后面的 webook 服务器上
+          #            端口是 80
+          - backend:
               service:
-                name: $ServiceTitle$
+                name: webook # 与 webook-service 的 name 对应
                 port:
-                  number: 80
-                $END$
+                  number: 80 # 与 webook-service 的 port 对应
+            pathType: Prefix
+            path: /
+                
