@@ -12,7 +12,6 @@ import (
 	context "context"
 	reflect "reflect"
 	domain "webook_go/webook/internal/domain"
-
 	gomock "go.uber.org/mock/gomock"
 )
 

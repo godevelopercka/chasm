@@ -20,6 +20,7 @@ type UserRepository interface {
 	FindByPhone(ctx context.Context, phone string) (domain.User, error)
 	Edit(ctx context.Context, id int64, Nickname, Birthday, AboutMe string) (domain.User, error)
 	Profile(ctx context.Context, id int64) (domain.User, error)
+	FindByWechat(ctx context.Context, openID string) (domain.User, error)
 }
 
 type CacheUserRepository struct {
@@ -32,6 +33,14 @@ func NewUserRepository(dao dao.UserDAO, c cache.UserCache) UserRepository {
 		dao:   dao,
 		cache: c,
 	}
+}
+
+func (r *CacheUserRepository) FindByWechat(ctx context.Context, openID string) (domain.User, error) {
+	u, err := r.dao.FindByWechat(ctx, openID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return r.entityToDomain(u), nil
 }
 
 func (r *CacheUserRepository) FindById(ctx context.Context, id int64) (domain.User, error) {
@@ -54,15 +63,17 @@ func (r *CacheUserRepository) FindById(ctx context.Context, id int64) (domain.Us
 	}
 
 	u = r.entityToDomain(ue)
+
+	//_ = r.cache.Set(ctx, u)
+	//if err != nil {
+	//	// 我这里怎么办？
+	//	// 打日志，做监控
+	//	//return domain.User{}, err
+	//}
 	go func() {
-		err = r.cache.Set(ctx, u)
-		if err != nil {
-			// 我这里怎么办？
-			// 打日志，做监控
-			//return domain.User{}, err
-		}
+		_ = r.cache.Set(ctx, u)
 	}()
-	return u, err
+	return u, nil
 }
 
 func (r *CacheUserRepository) Create(ctx context.Context, u domain.User) error {
@@ -114,7 +125,11 @@ func (r *CacheUserRepository) entityToDomain(u dao.User) domain.User {
 		Birthday: u.Birthday,
 		AboutMe:  u.AboutMe,
 		Phone:    u.Phone.String,
-		Ctime:    time.UnixMilli(u.Ctime),
+		WechatInfo: domain.WechatInfo{
+			UnionID: u.WechatUnionID.String,
+			OpenID:  u.WechatOpenID.String,
+		},
+		Ctime: time.UnixMilli(u.Ctime),
 	}
 }
 
@@ -134,6 +149,14 @@ func (r *CacheUserRepository) domainToEntiy(u domain.User) dao.User {
 		Nickname: u.Nickname,
 		Birthday: u.Birthday,
 		AboutMe:  u.AboutMe,
-		Ctime:    u.Ctime.UnixMilli(),
+		WechatOpenID: sql.NullString{
+			String: u.WechatInfo.OpenID,
+			Valid:  u.WechatInfo.OpenID != "",
+		},
+		WechatUnionID: sql.NullString{
+			String: u.WechatInfo.UnionID,
+			Valid:  u.WechatInfo.UnionID != "",
+		},
+		Ctime: u.Ctime.UnixMilli(),
 	}
 }

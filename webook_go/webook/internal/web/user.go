@@ -5,11 +5,13 @@ import (
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"net/http"
-	"time"
 	"webook_go/webook/internal/domain"
 	"webook_go/webook/internal/service"
+	ijwt "webook_go/webook/internal/web/jwt"
 )
 
 const biz = "login"
@@ -26,9 +28,11 @@ type UserHandler struct {
 	passwordExp *regexp.Regexp
 	BirthdayExp *regexp.Regexp
 	svc         service.UserService
+	ijwt.Handler
+	cmd redis.Cmdable
 }
 
-func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UserHandler {
+func NewUserHandler(svc service.UserService, codeSvc service.CodeService, jwtHdl ijwt.Handler) *UserHandler {
 	// 定义校验邮箱和密码的正则表达式
 	const (
 		emailRegexPattern    = "^\\w+([-+.]\\w+)*@\\w+([-.]\\w+)*\\.\\w+([-.]\\w+)*$"
@@ -46,6 +50,7 @@ func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UserH
 		BirthdayExp: birthdayExp,
 		svc:         svc,
 		codeSvc:     codeSvc,
+		Handler:     jwtHdl,
 	}
 }
 
@@ -58,8 +63,40 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 	ug.POST("/edit", u.EditJWT)
 	//ug.GET("/profile", u.Profile)
 	ug.GET("/profile", u.ProfileJWT)
+	ug.GET("/logout", u.LogOutJWT)
 	ug.POST("/login_sms/code/send", u.SendLoginSMSCode)
 	ug.POST("/login_sms", u.LoginSMS)
+	ug.POST("/refresh_token", u.RefreshToken)
+}
+
+// RefreshToken 可以同时刷新长短 token，用 redis 来记录是否有效，即 refresh_token 是一次性的
+// 参考登录校验部分，比较 User-Agent 来增强安全性
+func (u *UserHandler) RefreshToken(ctx *gin.Context) {
+	// 只有这个接口，拿出来的才是 refresh_token，其他地方都是 access token
+	refreshToken := u.ExtractToken(ctx)
+	var rc ijwt.RefreshClaims
+	token, err := jwt.ParseWithClaims(refreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
+		return ijwt.RtKey, nil
+	})
+	if err != nil || !token.Valid {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	err = u.CheckSession(ctx, rc.Ssid)
+	// 搞个新的 access_token
+	err = u.SetJWTToken(ctx, rc.Uid, rc.Ssid)
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		// 这种系统异常的含糊日志不要打，信息量不足，无法明确知道发生了什么错误，要坐到能根据日志定位问题
+		zap.L().Error("系统异常", zap.Error(err))
+		// 正常来说，msg 的部分就应该包含足够的定位信息
+		zap.L().Error("sdafagsaf 设置 JWT token 出现异常", zap.Error(err),
+			zap.String("method", "UserHandler:RefreshToken"))
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "刷新成功",
+	})
 }
 
 func (u *UserHandler) LoginSMS(ctx *gin.Context) {
@@ -78,6 +115,12 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 			Code: 5,
 			Msg:  "系统错误",
 		})
+		zap.L().Error("校验验证码出错", zap.Error(err),
+			// 不能这样打，因为手机号码是敏感数据，你不能打到日志里面
+			// 打印加密后的
+			zap.String("手机号码", req.Phone))
+		// 最多最多就这样
+		zap.L().Debug("", zap.String("手机号码", req.Phone))
 		return
 	}
 	if !ok {
@@ -98,15 +141,14 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 		return
 	}
 
-	// 这边要怎么办呢
-	// 从哪来
-	if err = u.setJWTToken(ctx, user.Id); err != nil {
+	if err = u.SetLoginToken(ctx, user.Id); err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
 		return
 	}
+
 	ctx.JSON(http.StatusOK, Result{
 		Code: 4,
 		Msg:  "验证码校验通过",
@@ -137,6 +179,7 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 			Msg: "发送成功",
 		})
 	case service.ErrCodeSendTooMany:
+		zap.L().Error("发送太频繁", zap.Error(err))
 		ctx.JSON(http.StatusOK, Result{
 			Msg: "发送太频繁，请稍候重试",
 		})
@@ -219,35 +262,15 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
-	// 步骤二
-	// 这里生成一个 JWT 设置登录态
-	// 生成一个 JWT token
 
-	if err = u.setJWTToken(ctx, user.Id); err != nil {
+	if err = u.SetLoginToken(ctx, user.Id); err != nil {
 		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
+
 	ctx.String(http.StatusOK, "登录成功")
 	fmt.Println(user)
 	return
-}
-
-func (u *UserHandler) setJWTToken(ctx *gin.Context, uid int64) error {
-	claims := UserClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)), // 过期时间：获取当前时间再加上1分钟
-		},
-		Uid:       uid,
-		UserAgent: ctx.Request.UserAgent(), // 拿到浏览器的 UserAgent, 也可以记录前端当时登录的设备信息，浏览信息等，然后打包传进来，这样可以保护 JWT 被盗用
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	tokenStr, err := token.SignedString([]byte("NDIOaqI8vCUZfWoNVcol0CuqFwHbu4cn")) // token 加密
-	if err != nil {
-		return err
-	}
-	ctx.Header("x-jwt-token", tokenStr) // 放到前端的 header 里面
-	return nil
 }
 
 func (u *UserHandler) Login(ctx *gin.Context) {
@@ -290,6 +313,20 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 	return
 }
 
+func (u *UserHandler) LogOutJWT(ctx *gin.Context) {
+	err := u.ClearToken(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "退出登录失败",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "退出登录OK",
+	})
+}
+
 func (u *UserHandler) LogOut(ctx *gin.Context) {
 	sess := sessions.Default(ctx)
 	sess.Options(sessions.Options{
@@ -312,7 +349,7 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 	//	return
 	//}
 	// ok 代表是不是 *UserClaims
-	claims, ok := c.(*UserClaims) // 断言 c 是不是 UserClaims 的指针，如果不是就会 panic
+	claims, ok := c.(*ijwt.UserClaims) // 断言 c 是不是 UserClaims 的指针，如果不是就会 panic
 	if !ok {
 		// 你可以考虑监控住这里
 		ctx.String(http.StatusOK, "系统错误")
@@ -413,7 +450,7 @@ func (u *UserHandler) ProfileJWT(ctx *gin.Context) {
 	//	return
 	//}
 	// ok 代表是不是 *UserClaims
-	claims, ok := c.(*UserClaims) // 断言 c 是不是 UserClaims 的指针，如果不是就会 panic
+	claims, ok := c.(*ijwt.UserClaims) // 断言 c 是不是 UserClaims 的指针，如果不是就会 panic
 	if !ok {
 		// 你可以考虑监控住这里
 		ctx.String(http.StatusOK, "系统错误")
@@ -462,11 +499,4 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 		Birthday: user.Birthday,
 		AboutMe:  user.AboutMe,
 	})
-}
-
-type UserClaims struct {
-	jwt.RegisteredClaims
-	// 声明你自己的要放进去 token 里面的数据
-	Uid       int64
-	UserAgent string
 }

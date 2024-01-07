@@ -7,6 +7,7 @@ import (
 	"webook_go/webook/internal/domain"
 	"webook_go/webook/internal/repository"
 	"webook_go/webook/internal/repository/cache"
+	"webook_go/webook/pkg/logger"
 )
 
 var ErrUserDuplicateEmail = repository.ErrUserDuplicate
@@ -18,17 +19,20 @@ type UserService interface {
 	Edit(ctx context.Context, id int64, Nickname, Birthday, AboutMe string) (domain.User, error)
 	FindOrCreate(ctx context.Context, Phone string) (domain.User, error)
 	Profile(ctx context.Context, id int64) (domain.User, error)
+	FindOrCreateByWechat(ctx context.Context, wechatInfo domain.WechatInfo) (domain.User, error)
 }
 
 type userService struct {
 	repo  repository.UserRepository
-	cache cache.CodeCache
+	cache cache.CodeRedisCache
+	l     logger.LoggerV1
 }
 
-func NewUserService(repo repository.UserRepository, c cache.CodeCache) UserService {
+func NewUserService(repo repository.UserRepository, c cache.CodeRedisCache, l logger.LoggerV1) UserService {
 	return &userService{
 		repo:  repo,
 		cache: c,
+		l:     l,
 	}
 }
 
@@ -77,7 +81,9 @@ func (svc *userService) FindOrCreate(ctx context.Context, Phone string) (domain.
 		// 不为 ErrUserNotFound 的也会进来这里
 		return u, err
 	}
-
+	// 这里，把 phone 脱敏之后打出来
+	//zap.L().Info("用户未注册", zap.String("phone", Phone))
+	svc.l.Info("用户未注册", logger.String("phone", Phone))
 	// 在系统资源不足，触发降级之后，不执行慢路径了。相当于优先服务已经注册的用户
 	if ctx.Value("降级") == "true" {
 		return domain.User{}, errors.New("系统降级了")
@@ -93,6 +99,27 @@ func (svc *userService) FindOrCreate(ctx context.Context, Phone string) (domain.
 	}
 	// 因为这里会遇到主从延迟的问题
 	return svc.repo.FindByPhone(ctx, Phone)
+}
+
+func (svc *userService) FindOrCreateByWechat(ctx context.Context, info domain.WechatInfo) (domain.User, error) {
+	u, err := svc.repo.FindByWechat(ctx, info.OpenID)
+	// 要判断，是否有这个用户
+	if err != repository.ErrUserNotFound {
+		return u, err
+	}
+
+	if ctx.Value("降级") == "true" {
+		return domain.User{}, errors.New("系统降级了")
+	}
+	u = domain.User{
+		WechatInfo: info,
+	}
+	err = svc.repo.Create(ctx, u)
+	if err != nil || err != repository.ErrUserDuplicate {
+		return u, err
+	}
+	// 因为这里会遇到主从延迟的问题
+	return svc.repo.FindByWechat(ctx, info.OpenID)
 }
 
 func (svc *userService) Profile(ctx context.Context, id int64) (domain.User, error) {

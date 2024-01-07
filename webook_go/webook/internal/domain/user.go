@@ -12,5 +12,7 @@ type User struct {
 	Birthday string
 	AboutMe  string
 	Phone    string
-	Ctime    time.Time
+	// 不要组合，万一你可能还有钉钉的相同字段 UionID
+	WechatInfo WechatInfo
+	Ctime      time.Time
 }
