@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"webook_go/webook/internal/integration"
+	"webook_go/webook/internal/integration/startup"
 	ijwt "webook_go/webook/internal/web/jwt"
 	"webook_go/webook/internal/web/middleware"
 )
@@ -30,7 +30,7 @@ func main() {
 	//initViperRemote()
 	keys := viper.AllKeys()
 	println(keys)
-	server := integration.InitWebServer()
+	server := startup.InitWebServer()
 	//server := gin.Default()
 	server.GET("/hello", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "你好，你来了")
