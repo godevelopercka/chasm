@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"webook_go/webook/internal/repository"
+	"webook_go/webook/internal/repository/article"
 	"webook_go/webook/internal/repository/cache"
 	"webook_go/webook/internal/repository/dao"
 	"webook_go/webook/internal/service"
@@ -29,7 +30,7 @@ func InitWebServer() *gin.Engine {
 		//articlSvcProvider,
 		dao.NewGORMArticleDAO,
 		repository.NewCodeRepository,
-		repository.NewArticleRepository,
+		article.NewArticleRepository,
 		// service 部分
 		// 集成测试我们显示指定使用内存实现
 		ioc.InitSMSService,
@@ -60,7 +61,7 @@ func InitArticleHandler() *web.ArticleHandler {
 		dao.NewGORMArticleDAO,
 		service.NewArticleService,
 		web.NewArticleHandler,
-		repository.NewArticleRepository)
+		article.NewArticleRepository)
 	return &web.ArticleHandler{}
 }
 

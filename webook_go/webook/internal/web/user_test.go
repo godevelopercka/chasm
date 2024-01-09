@@ -36,8 +36,8 @@ package web
 //				return usersvc
 //			},
 //			reqBody: `{
-//    "email": "123456@qq.com",
-//    "password": "hello@world123",
+//   "email": "123456@qq.com",
+//   "password": "hello@world123",
 //	"confirmPassword": "hello@world123"
 //}
 //`,
@@ -53,8 +53,8 @@ package web
 //			},
 //			reqBody: `
 //{
-//    "email": "123@qq.com",
-//    "password": "hello@world123"
+//   "email": "123@qq.com",
+//   "password": "hello@world123"
 //`,
 //			wantCode: http.StatusBadRequest,
 //		},
@@ -66,8 +66,8 @@ package web
 //			},
 //			reqBody: `
 //{
-//    "email": "123@qm",
-//    "password": "hello@world123",
+//   "email": "123@qm",
+//   "password": "hello@world123",
 //	"confirmPassword": "hello@world123"
 //}
 //`,
@@ -82,8 +82,8 @@ package web
 //			},
 //			reqBody: `
 //{
-//    "email": "123@qq.com",
-//    "password": "hello@world1234",
+//   "email": "123@qq.com",
+//   "password": "hello@world1234",
 //	"confirmPassword": "hello@world123"
 //}
 //`,
@@ -98,8 +98,8 @@ package web
 //			},
 //			reqBody: `
 //{
-//    "email": "123@qq.com",
-//    "password": "hello123",
+//   "email": "123@qq.com",
+//   "password": "hello123",
 //	"confirmPassword": "hello123"
 //}
 //`,
@@ -119,8 +119,8 @@ package web
 //			},
 //			reqBody: `
 //{
-//    "email": "123@qq.com",
-//    "password": "hello@world123",
+//   "email": "123@qq.com",
+//   "password": "hello@world123",
 //	"confirmPassword": "hello@world123"
 //}
 //`,
@@ -140,8 +140,8 @@ package web
 //			},
 //			reqBody: `
 //{
-//    "email": "123@qq.com",
-//    "password": "hello@world123",
+//   "email": "123@qq.com",
+//   "password": "hello@world123",
 //	"confirmPassword": "hello@world123"
 //}
 //`,
@@ -156,7 +156,7 @@ package web
 //			defer ctrl.Finish()
 //			server := gin.Default()
 //			// 用不上 codeSvc
-//			h := NewUserHandler(tc.mock(ctrl), nil)
+//			h := NewUserHandler(tc.mock(ctrl), nil, nil)
 //			h.RegisterRoutes(server)
 //
 //			req, err := http.NewRequest(http.MethodPost, "/users/signup", bytes.NewBuffer([]byte(tc.reqBody)))
