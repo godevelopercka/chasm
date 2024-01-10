@@ -19,7 +19,7 @@ type articleService struct {
 	// V0
 	repo article.ArticleRepository
 
-	// V1
+	// V1 依靠两个不同的 repository 来解决这种跨表，或者跨库的问题
 	author article.ArticleAuthorRepository
 	reader article.ArticleReaderRepository
 	l      logger.LoggerV1
@@ -30,7 +30,7 @@ func (a *articleService) Publish(ctx context.Context, art domain.Article) (int64
 	//	id, err := a.repo.Create(ctx, art)
 	//	// 线上库呢？
 	//  a.repo.SyncToLiveDB(ctx, art)
-	panic("implement me")
+	return a.repo.Sync(ctx, art)
 }
 
 func (a *articleService) PublishV1(ctx context.Context, art domain.Article) (int64, error) {

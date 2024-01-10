@@ -1,15 +1,18 @@
-package dao
+package article
 
 import (
 	"context"
 	"fmt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"time"
 )
 
 type ArticleDAO interface {
 	Insert(ctx context.Context, art Article) (int64, error)
 	UpdateById(ctx context.Context, article Article) error
+	Sync(ctx context.Context, article Article) (int64, error)
+	Upsert(ctx context.Context, article PublishArticle) error
 }
 
 type GORMArticleDAO struct {
@@ -21,6 +24,70 @@ func NewGORMArticleDAO(db *gorm.DB) ArticleDAO {
 		db: db,
 	}
 }
+
+func (dao GORMArticleDAO) Sync(ctx context.Context, art Article) (int64, error) {
+	// 先操作制作库（此时应该是表），后操作线上库（此时应该是表）
+	// 在事务内部，这里采用了闭包形态
+	// GORM 帮助我们管理了事务的生命周期
+	// Begin, Rollback 和 Commit 都不需要我们操心
+	var (
+		id = art.Id
+	)
+	// tx => Transaction, trx, txn
+	err := dao.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		txDAO := NewGORMArticleDAO(tx)
+		if id > 0 {
+			err = txDAO.UpdateById(ctx, art)
+		} else {
+			id, err = txDAO.Insert(ctx, art)
+		}
+		if err != nil {
+			return err
+		}
+		// 操作线上库了
+		return txDAO.Upsert(ctx, PublishArticle{Article: art})
+	})
+	return id, err
+}
+
+// Upsert INSERT OR UPDATE
+func (dao GORMArticleDAO) Upsert(ctx context.Context, art PublishArticle) error {
+	now := time.Now().UnixMilli()
+	art.Ctime = now
+	art.Utime = now
+	// 这个是插入
+	// OnConflict 的意思是数据冲突了
+	err := dao.db.Clauses(clause.OnConflict{
+		// SQL 2003 标准
+		// INSERT XXX ON CONFLICT(BBB) DO NOTHING
+		// INSERT XXX ON CONFLICT(BBB) DO UPDATES CCC WHERE DDD
+		// 哪些列冲突
+		//Columns: []clause.Column{clause.Column{Name: "id"}},
+		// 意思是数据冲突，啥也不干
+		// DoNothing：
+		// 数据冲突了，并且符合 WHERE 条件的就会执行 DO UPDATES
+		// Where:
+
+		// MySQL 只需要关心这里
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"title":   art.Title,
+			"content": art.Content,
+			"utime":   now,
+		}),
+	}).Create(&art).Error
+	// MySQL 最终的语句 INSERT xxx ON DUPLICATE KEY UPDATE xxx
+
+	// 一条 SQL 语句，都不需要开启事务
+	// auto commit：意思是自动提交
+	return err
+}
+
+// 事务传播机制是指如果当前有事务，就在事务内部执行 Insert
+// 如果没有事务：
+// 1.开启事务，执行 Insert
+// 2.直接执行
+// 3.报错
 
 func (dao GORMArticleDAO) Insert(ctx context.Context, art Article) (int64, error) {
 	now := time.Now().UnixMilli()

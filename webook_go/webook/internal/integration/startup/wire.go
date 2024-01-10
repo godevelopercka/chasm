@@ -9,6 +9,7 @@ import (
 	"webook_go/webook/internal/repository/article"
 	"webook_go/webook/internal/repository/cache"
 	"webook_go/webook/internal/repository/dao"
+	article2 "webook_go/webook/internal/repository/dao/article"
 	"webook_go/webook/internal/service"
 	"webook_go/webook/internal/web"
 	ijwt "webook_go/webook/internal/web/jwt"
@@ -28,7 +29,7 @@ func InitWebServer() *gin.Engine {
 		thirdProvider,
 		userSvcProvider,
 		//articlSvcProvider,
-		dao.NewGORMArticleDAO,
+		article2.NewGORMArticleDAO,
 		repository.NewCodeRepository,
 		article.NewArticleRepository,
 		// service 部分
@@ -58,7 +59,7 @@ func InitWebServer() *gin.Engine {
 
 func InitArticleHandler() *web.ArticleHandler {
 	wire.Build(thirdProvider,
-		dao.NewGORMArticleDAO,
+		article2.NewGORMArticleDAO,
 		service.NewArticleService,
 		web.NewArticleHandler,
 		article.NewArticleRepository)
