@@ -374,9 +374,9 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "生日日期格式不对")
 		return
 	}
-	fmt.Println(claims.Uid)
+	fmt.Println(claims.Id)
 	// 调用一下 svc 的方法
-	user, err := u.svc.Edit(ctx, claims.Uid, req.Nickname, req.Birthday, req.AboutMe)
+	user, err := u.svc.Edit(ctx, claims.Id, req.Nickname, req.Birthday, req.AboutMe)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统异常")
 		return
@@ -462,7 +462,7 @@ func (u *UserHandler) ProfileJWT(ctx *gin.Context) {
 		Birthday string
 		AboutMe  string
 	}
-	user, err := u.svc.Profile(ctx, claims.Uid)
+	user, err := u.svc.Profile(ctx, claims.Id)
 	if err != nil {
 		// 按照道理来说，这边 id 对应的数据肯定存在，所以要是没找到，
 		// 那就说明是系统出了问题。

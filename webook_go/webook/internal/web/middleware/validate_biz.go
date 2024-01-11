@@ -9,6 +9,6 @@ package middleware
 //		uc := ctx.MustGet("user").(jwt.UserClaims)
 //		单体应用就是数据库
 //		微服务呢？调用微服务 - 做客户端缓存
-//		validate(biz, bizId, uc.Uid)
+//		validate(biz, bizId, uc.Id)
 //	}
 //}

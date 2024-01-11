@@ -23,6 +23,6 @@ type UserClaims struct {
 	jwt.RegisteredClaims
 	// 声明你自己的要放进去 token 里面的数据
 	Ssid      string
-	Uid       int64
+	Id        int64
 	UserAgent string
 }

@@ -84,7 +84,7 @@ func (h RedisJWTHandler) SetJWTToken(ctx *gin.Context, uid int64, ssid string) e
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)), // 过期时间：获取当前时间再加上1分钟
 		},
-		Uid:       uid,
+		Id:        uid,
 		Ssid:      ssid,
 		UserAgent: ctx.Request.UserAgent(), // 拿到浏览器的 UserAgent, 也可以记录前端当时登录的设备信息，浏览信息等，然后打包传进来，这样可以保护 JWT 被盗用
 	}

@@ -81,7 +81,7 @@ func TestArticleHandler_Publish(t *testing.T) {
 	server := gin.Default()
 	server.Use(func(ctx *gin.Context) {
 		ctx.Set("claims", &ijwt.UserClaims{
-			Uid: 123,
+			Id: 123,
 		})
 	})
 	for _, tc := range testCase {
