@@ -54,6 +54,7 @@ func (dao *GORMArticleDAO) SyncStatus(ctx context.Context, id int64, author int6
 	})
 }
 
+// Sync 是GORMArticleDAO结构体的方法，用于同步文章数据
 func (dao *GORMArticleDAO) Sync(ctx context.Context, art Article) (int64, error) {
 	// 先操作制作库（此时应该是表），后操作线上库（此时应该是表）
 	// 在事务内部，这里采用了闭包形态
@@ -63,9 +64,11 @@ func (dao *GORMArticleDAO) Sync(ctx context.Context, art Article) (int64, error)
 		id = art.Id
 	)
 	// tx => Transaction, trx, txn
+	// 使用 GORM 的 Transaction 方法开始一个新的事务
+	// 事务的执行逻辑被封装在闭包函数中
 	err := dao.db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		txDAO := NewGORMArticleDAO(tx)
+		txDAO := NewGORMArticleDAO(tx) // 创建一个新的GORMArticleDAO实例，用于在该事务中操作数据库
 		if id > 0 {
 			err = txDAO.UpdateById(ctx, art)
 		} else {
@@ -74,7 +77,7 @@ func (dao *GORMArticleDAO) Sync(ctx context.Context, art Article) (int64, error)
 		if err != nil {
 			return err
 		}
-		// 操作线上库了
+		// 操作线上库了，使用txDAO的Upsert方法插入或更新已发布的文章数据
 		return txDAO.Upsert(ctx, PublishedArticle{Article: art})
 	})
 	return id, err

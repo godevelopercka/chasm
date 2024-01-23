@@ -67,7 +67,7 @@ func (h *ArticleHandler) Publish(ctx *gin.Context) {
 }
 
 func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
-	var Req struct {
+	type Req struct {
 		Id int64
 	}
 	var req Req
@@ -114,15 +114,13 @@ func (h *ArticleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	c := ctx.MustGet("claims")
-	claims, ok := c.(*ijwt.UserClaims) // 断言 c 是不是 UserClaims 的指针，如果不是就会 panic
+	claims, ok := c.(*ijwt.UserClaims)
 	if !ok {
-		// 你可以考虑监控住这里
-		//ctx.AbortWithStatus(http.StatusUnauthorized)
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
-		h.l.Error("未发现用户的 session 信息")
+		h.l.Debug("未发现用户的 session 信息")
 		return
 	}
 	// 检测输入，跳过这一步
@@ -149,7 +147,14 @@ type ArticleReq struct {
 	Content string `json:"content"`
 }
 
+// toDomain 方法将ArticleReq结构体转换为domain.Article结构体
+// 它接受一个int64类型的uid作为参数，并返回一个domain.Article实例
 func (req ArticleReq) toDomain(uid int64) domain.Article {
+	// 创建一个新的domain.Article实例，并设置其各个字段的值
+	// Id字段的值来自req.Id
+	// Title字段的值来自req.Title
+	// Content字段的值来自req.Content
+	// Author字段是一个domain.Author类型，其中Id字段的值是传入的uid参数
 	return domain.Article{
 		Id:      req.Id,
 		Title:   req.Title,

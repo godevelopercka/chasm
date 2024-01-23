@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"webook_go/webook/internal/repository"
-	"webook_go/webook/internal/repository/article"
+	article2 "webook_go/webook/internal/repository/article"
 	"webook_go/webook/internal/repository/cache"
 	"webook_go/webook/internal/repository/dao"
-	article2 "webook_go/webook/internal/repository/dao/article"
+	"webook_go/webook/internal/repository/dao/article"
 	"webook_go/webook/internal/service"
 	"webook_go/webook/internal/web"
 	"webook_go/webook/internal/web/jwt"
@@ -40,18 +40,18 @@ func InitWebServer() *gin.Engine {
 	wechatService := ioc.InitWechatService(loggerV1)
 	wechatHandlerConfig := InitWechatHandlerConfig()
 	oAuth2WechatHandler := web.NewOAuth2WechatHandler(wechatService, userService, handler, wechatHandlerConfig)
-	articleDAO := article2.NewGORMArticleDAO(gormDB)
-	articleRepository := article.NewArticleRepository(articleDAO)
+	articleDAO := article.NewGORMArticleDAO(gormDB)
+	articleRepository := article2.NewArticleRepository(articleDAO)
 	articleService := service.NewArticleService(articleRepository)
 	articleHandler := web.NewArticleHandler(articleService, loggerV1)
 	engine := ioc.InitGin(v, userHandler, oAuth2WechatHandler, articleHandler)
 	return engine
 }
 
-func InitArticleHandler() *web.ArticleHandler {
+func InitArticleHandler(dao article.ArticleDAO) *web.ArticleHandler {
 	gormDB := InitTestDB()
-	articleDAO := article2.NewGORMArticleDAO(gormDB)
-	articleRepository := article.NewArticleRepository(articleDAO)
+	articleDAO := article.NewGORMArticleDAO(gormDB)
+	articleRepository := article2.NewArticleRepository(articleDAO)
 	articleService := service.NewArticleService(articleRepository)
 	loggerV1 := InitLog()
 	articleHandler := web.NewArticleHandler(articleService, loggerV1)

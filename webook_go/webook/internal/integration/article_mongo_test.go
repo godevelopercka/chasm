@@ -83,7 +83,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticleHandler_Edit() {
 		after func(t *testing.T)
 		// 构造请求，直接使用 req
 		// 也就是说，我们放弃测试 Bind 的异常分支
-		req Article
+		req ArticleV1
 
 		// 预期响应
 		wantCode   int
@@ -116,7 +116,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticleHandler_Edit() {
 					Status:   domain.ArticleStatusUnpublished.ToUint8(),
 				}, art)
 			},
-			req: Article{
+			req: ArticleV1{
 				Title:   "hello，你好",
 				Content: "随便试试",
 			},
@@ -162,7 +162,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticleHandler_Edit() {
 					Status: domain.ArticleStatusUnpublished.ToUint8(),
 				}, art)
 			},
-			req: Article{
+			req: ArticleV1{
 				Id:      2,
 				Title:   "新的标题",
 				Content: "新的内容",
@@ -208,7 +208,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticleHandler_Edit() {
 					Status:   domain.ArticleStatusPublished.ToUint8(),
 				}, art)
 			},
-			req: Article{
+			req: ArticleV1{
 				Id:      3,
 				Title:   "新的标题",
 				Content: "新的内容",
@@ -263,7 +263,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 		before func(t *testing.T)
 		// 验证并且删除数据
 		after func(t *testing.T)
-		req   Article
+		req   ArticleV1
 
 		// 预期响应
 		wantCode   int
@@ -298,7 +298,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 				assert.True(t, publishedArt.Ctime > 0)
 				assert.True(t, publishedArt.Utime > 0)
 			},
-			req: Article{
+			req: ArticleV1{
 				Title:   "hello，你好",
 				Content: "随便试试",
 			},
@@ -349,7 +349,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 				assert.True(t, publishedArt.Ctime > 0)
 				assert.True(t, publishedArt.Utime > 0)
 			},
-			req: Article{
+			req: ArticleV1{
 				Id:      2,
 				Title:   "新的标题",
 				Content: "新的内容",
@@ -376,7 +376,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 				// 模拟已经存在的帖子，并且是已经发布的帖子
 				_, err := s.col.InsertOne(ctx, &art)
 				assert.NoError(t, err)
-				part := article.PublishedArticle(art)
+				part := article.PublishedArticle{art}
 				_, err = s.liveCol.InsertOne(ctx, &part)
 				assert.NoError(t, err)
 			},
@@ -408,7 +408,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 				// 更新时间变了
 				assert.True(t, part.Utime > 234)
 			},
-			req: Article{
+			req: ArticleV1{
 				Id:      3,
 				Title:   "新的标题",
 				Content: "新的内容",
@@ -436,7 +436,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 				// 模拟已经存在的帖子，并且是已经发布的帖子
 				_, err := s.col.InsertOne(ctx, &art)
 				assert.NoError(t, err)
-				part := article.PublishedArticle(art)
+				part := article.PublishedArticle{art}
 				_, err = s.liveCol.InsertOne(ctx, &part)
 				assert.NoError(t, err)
 			},
@@ -468,7 +468,7 @@ func (s *ArticleMongoHandlerTestSuite) TestArticle_Publish() {
 				// 更新时间变了
 				assert.Equal(t, int64(234), part.Utime)
 			},
-			req: Article{
+			req: ArticleV1{
 				Id:      4,
 				Title:   "新的标题",
 				Content: "新的内容",
@@ -520,7 +520,7 @@ func TestMongoArticle(t *testing.T) {
 	suite.Run(t, new(ArticleMongoHandlerTestSuite))
 }
 
-type Article struct {
+type ArticleV1 struct {
 	Id      int64  `json:"id"`
 	Title   string `json:"title"`
 	Content string `json:"content"`

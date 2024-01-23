@@ -1,1 +1,5 @@
 package startup
+
+func InitKafka() {
+
+}

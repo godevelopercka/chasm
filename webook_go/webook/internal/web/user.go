@@ -7,11 +7,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 	"net/http"
 	"webook_go/webook/internal/domain"
 	"webook_go/webook/internal/service"
 	ijwt "webook_go/webook/internal/web/jwt"
+	"webook_go/webook/pkg/logger"
 )
 
 const biz = "login"
@@ -30,6 +30,7 @@ type UserHandler struct {
 	svc         service.UserService
 	ijwt.Handler
 	cmd redis.Cmdable
+	l   logger.LoggerV1
 }
 
 func NewUserHandler(svc service.UserService, codeSvc service.CodeService, jwtHdl ijwt.Handler) *UserHandler {
@@ -80,18 +81,27 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	})
 	if err != nil || !token.Valid {
 		ctx.AbortWithStatus(http.StatusUnauthorized)
+		u.l.Debug("token过期，请重新登录")
 		return
 	}
+	// 检查给定的会话ID是否存在于Redis中
 	err = u.CheckSession(ctx, rc.Ssid)
 	// 搞个新的 access_token
 	err = u.SetJWTToken(ctx, rc.Uid, rc.Ssid)
 	if err != nil {
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		// 这种系统异常的含糊日志不要打，信息量不足，无法明确知道发生了什么错误，要坐到能根据日志定位问题
-		zap.L().Error("系统异常", zap.Error(err))
+		//zap.L().Error("系统异常", zap.Error(err))
 		// 正常来说，msg 的部分就应该包含足够的定位信息
-		zap.L().Error("sdafagsaf 设置 JWT token 出现异常", zap.Error(err),
-			zap.String("method", "UserHandler:RefreshToken"))
+		//zap.L().Error("sdafagsaf 设置 JWT token 出现异常", zap.Error(err),
+		//	zap.String("method", "UserHandler:RefreshToken"))
+		u.l.Error("sdafagsaf 设置 JWT token 出现异常", logger.Field{
+			Key:   "err",
+			Value: err,
+		}, logger.Field{
+			Key:   "method",
+			Value: "UserHandler:RefreshToken",
+		})
 		return
 	}
 	ctx.JSON(http.StatusOK, Result{
@@ -106,6 +116,7 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 	}
 	var req Req
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 	// 这边，可以加上各种校验
@@ -115,12 +126,14 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 			Code: 5,
 			Msg:  "系统错误",
 		})
-		zap.L().Error("校验验证码出错", zap.Error(err),
-			// 不能这样打，因为手机号码是敏感数据，你不能打到日志里面
-			// 打印加密后的
-			zap.String("手机号码", req.Phone))
+		//zap.L().Error("校验验证码出错", zap.Error(err),
+		// 不能这样打，因为手机号码是敏感数据，你不能打到日志里面
+		// 打印加密后的
+		//zap.String("手机号码", req.Phone))
+		u.l.Error("校验验证码出错", logger.Field{Key: "err", Value: err})
 		// 最多最多就这样
-		zap.L().Debug("", zap.String("手机号码", req.Phone))
+		//zap.L().Debug("", zap.String("手机号码", req.Phone))
+		//u.l.Debug("用户手机号码", logger.Field{Key: "Phone", Value: req.Phone})
 		return
 	}
 	if !ok {
@@ -128,6 +141,7 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 			Code: 4,
 			Msg:  "验证码有误",
 		})
+		u.l.Info("验证码有误", logger.Field{Key: "code", Value: req.Code})
 		return
 	}
 
@@ -138,6 +152,7 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 			Code: 5,
 			Msg:  "系统错误",
 		})
+		u.l.Error("用户登录/注册失败", logger.Field{Key: "err", Value: err})
 		return
 	}
 
@@ -146,6 +161,7 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 			Code: 5,
 			Msg:  "系统错误",
 		})
+		u.l.Error("获取登录信息错误", logger.Field{Key: "err", Value: err})
 		return
 	}
 
@@ -161,6 +177,7 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 	}
 	var req Req
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 	// 是不是一个合法的手机号
@@ -170,6 +187,7 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 			Code: 4,
 			Msg:  "输入有误",
 		})
+		u.l.Error("输入邮箱或手机号有误", logger.Field{Key: "输入有误", Value: req.Phone})
 		return
 	}
 	err := u.codeSvc.Send(ctx, biz, req.Phone)
@@ -179,7 +197,8 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 			Msg: "发送成功",
 		})
 	case service.ErrCodeSendTooMany:
-		zap.L().Error("发送太频繁", zap.Error(err))
+		//zap.L().Error("发送太频繁", zap.Error(err))
+		u.l.Error("发送太频繁", logger.Field{Key: "err", Value: err})
 		ctx.JSON(http.StatusOK, Result{
 			Msg: "发送太频繁，请稍候重试",
 		})
@@ -188,6 +207,7 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 			Code: 5,
 			Msg:  "系统错误",
 		})
+		u.l.Error("系统错误", logger.Field{Key: "发送短信失败", Value: err})
 	}
 }
 
@@ -201,6 +221,7 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 
 	// bind 方法接收请求参数
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 
@@ -208,23 +229,28 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 	ok, err := u.emailExp.MatchString(req.Email)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "邮箱正则表达式出错, err", Value: err})
 		return
 	}
 	if !ok {
 		ctx.String(http.StatusOK, "邮箱格式不正确")
+		u.l.Debug("邮箱输入格式错误")
 		return
 	}
 	ok, err = u.passwordExp.MatchString(req.Password)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "密码正则表达式出错, err", Value: err})
 		return
 	}
 	if !ok {
 		ctx.String(http.StatusOK, "密码必须大于8位，包含数字、英文字母、特殊字符")
+		u.l.Debug("密码输入格式错误")
 		return
 	}
 	if req.ConfirmPassword != req.Password {
 		ctx.String(http.StatusOK, "两次输入的密码不一致")
+		u.l.Debug("输入密码错误")
 		return
 	}
 	// 调用一下 svc 的方法
@@ -234,10 +260,12 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 	})
 	if err == service.ErrUserDuplicateEmail {
 		ctx.String(http.StatusOK, "邮箱冲突")
+		u.l.Debug("邮箱冲突")
 		return
 	}
 	if err != nil {
 		ctx.String(http.StatusOK, "系统异常")
+		u.l.Error("系统异常", logger.Field{Key: "注册异常, err", Value: err})
 		return
 	}
 	ctx.String(http.StatusOK, "注册成功")
@@ -251,20 +279,24 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 	}
 	var req LoginReq
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 	user, err := u.svc.Login(ctx, req.Email, req.Password)
 	if err == service.ErrInvalidUserOrPassword {
 		ctx.String(http.StatusOK, "用户名或密码不对")
+		u.l.Debug("用户名或密码不对")
 		return
 	}
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "登录失败, err", Value: err})
 		return
 	}
 
 	if err = u.SetLoginToken(ctx, user.Id); err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "设置登录鉴权信息失败, err", Value: err})
 		return
 	}
 
@@ -280,15 +312,18 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 	}
 	var req LoginReq
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 	user, err := u.svc.Login(ctx, req.Email, req.Password)
 	if err == service.ErrInvalidUserOrPassword {
 		ctx.String(http.StatusOK, "用户名或密码不对")
+		u.l.Debug("用户名或密码不对")
 		return
 	}
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "登录失败, err", Value: err})
 		return
 	}
 	// 步骤二
@@ -320,6 +355,7 @@ func (u *UserHandler) LogOutJWT(ctx *gin.Context) {
 			Code: 5,
 			Msg:  "退出登录失败",
 		})
+		u.l.Error("系统错误", logger.Field{Key: "登出失败, err", Value: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, Result{
@@ -353,6 +389,7 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 	if !ok {
 		// 你可以考虑监控住这里
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("设置claims失败")
 		return
 	}
 	type EditReq struct {
@@ -362,16 +399,19 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 	}
 	var req EditReq
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 	// 校验生日
 	ok, err := u.BirthdayExp.MatchString(req.Birthday)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "生日正则表达式出错, err", Value: err})
 		return
 	}
 	if !ok {
 		ctx.String(http.StatusOK, "生日日期格式不对")
+		u.l.Debug("生日日期格式不对", logger.Field{Key: "生日日期格式不对, err", Value: req.Birthday})
 		return
 	}
 	fmt.Println(claims.Id)
@@ -379,14 +419,17 @@ func (u *UserHandler) EditJWT(ctx *gin.Context) {
 	user, err := u.svc.Edit(ctx, claims.Id, req.Nickname, req.Birthday, req.AboutMe)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统异常")
+		u.l.Error("系统错误", logger.Field{Key: "调用编辑方法出错, err", Value: err})
 		return
 	}
 	if len(req.Nickname) > 24 {
 		ctx.String(http.StatusOK, "昵称过长")
+		u.l.Debug("昵称过长", logger.Field{Key: "昵称过长, err", Value: req.Nickname})
 		return
 	}
 	if len(req.AboutMe) > 1024 {
 		ctx.String(http.StatusOK, "个人简介过长")
+		u.l.Debug("个人简介过长", logger.Field{Key: "个人简介过长, err", Value: req.AboutMe})
 		return
 	}
 	ctx.String(http.StatusOK, "提交成功")
@@ -410,30 +453,36 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 	}
 	var req EditReq
 	if err := ctx.Bind(&req); err != nil {
+		u.l.Error("系统错误", logger.Field{Key: "接收参数出错, err", Value: err})
 		return
 	}
 	// 校验生日
 	ok, err := u.BirthdayExp.MatchString(req.Birthday)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "生日正则表达式出错, err", Value: err})
 		return
 	}
 	if !ok {
 		ctx.String(http.StatusOK, "生日日期格式不对")
+		u.l.Debug("生日日期格式不对", logger.Field{Key: "生日日期格式不对, err", Value: req.Birthday})
 		return
 	}
 	// 调用一下 svc 的方法
 	user, err := u.svc.Edit(ctx, id, req.Nickname, req.Birthday, req.AboutMe)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统异常")
+		u.l.Error("系统错误", logger.Field{Key: "调用编辑方法出错, err", Value: err})
 		return
 	}
 	if len(req.Nickname) > 24 {
 		ctx.String(http.StatusOK, "昵称过长")
+		u.l.Debug("昵称过长", logger.Field{Key: "昵称过长, err", Value: req.Nickname})
 		return
 	}
 	if len(req.AboutMe) > 1024 {
 		ctx.String(http.StatusOK, "个人简介过长")
+		u.l.Debug("个人简介过长", logger.Field{Key: "个人简介过长, err", Value: req.AboutMe})
 		return
 	}
 	ctx.String(http.StatusOK, "提交成功")
@@ -454,6 +503,7 @@ func (u *UserHandler) ProfileJWT(ctx *gin.Context) {
 	if !ok {
 		// 你可以考虑监控住这里
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("设置claims失败")
 		return
 	}
 	type Profile struct {
@@ -467,6 +517,7 @@ func (u *UserHandler) ProfileJWT(ctx *gin.Context) {
 		// 按照道理来说，这边 id 对应的数据肯定存在，所以要是没找到，
 		// 那就说明是系统出了问题。
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "claims.Id 没找到", Value: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, Profile{
@@ -491,6 +542,7 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 		// 按照道理来说，这边 id 对应的数据肯定存在，所以要是没找到，
 		// 那就说明是系统出了问题。
 		ctx.String(http.StatusOK, "系统错误")
+		u.l.Error("系统错误", logger.Field{Key: "claims.Id 没找到", Value: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, Profile{
